@@ -222,6 +222,17 @@
   .rev-row .rv-who{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .rev-row .rv-note{font-size:11px;color:var(--slip-soft);margin-top:2px}
   .rev-row .rv-amt{font-family:'IBM Plex Mono',monospace;font-size:14px;flex:none}
+  .item-row{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    background:var(--desk-3);border:1px solid var(--hair);border-radius:3px;
+    padding:11px 12px;margin-bottom:6px;width:100%;text-align:left;
+  }
+  .item-row .it-who{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .item-row .it-when{font-size:11px;color:var(--slip-soft);margin-top:2px;letter-spacing:.03em}
+  .item-row .it-amt{font-family:'IBM Plex Mono',monospace;font-size:14px;flex:none}
+  .env-tot{font-family:'IBM Plex Mono',monospace;font-size:15px;margin-bottom:4px}
+  .env-tot span{color:var(--slip-soft);font-size:12px;font-family:'Archivo',sans-serif}
+  .chip.back{background:var(--desk-3);color:var(--slip);border:1px solid var(--manila)}
   .rev-row.keep{border-color:var(--manila)}
   .rev-row.keep .rv-note{color:var(--manila)}
   .toast{
@@ -272,7 +283,7 @@
 
 <div class="bar">
   <button class="btn primary" id="btnAdd">+ Purchase</button>
-  <button class="btn" id="btnPaste">Paste alerts</button>
+  <button class="btn" id="btnVenmo">+ Venmo</button>
   <button class="btn" id="btnIn">Money in</button>
 </div>
 
@@ -298,6 +309,22 @@
   <div class="field"><label for="inWho">Source</label><input id="inWho" placeholder="Paycheck"></div>
   <div class="field"><label for="inAmt">Amount</label><input id="inAmt" class="mono" inputmode="decimal" placeholder="0.00"></div>
   <div class="row"><button class="btn primary" id="inSave">Log it</button><button class="btn" data-close>Cancel</button></div>
+</div>
+
+<!-- venmo -->
+<div class="sheet" id="sheetVenmo">
+  <h2>Venmo</h2>
+  <div class="field">
+    <label>Which way</label>
+    <div class="chips" id="vmDir">
+      <button class="chip" data-dir="out">I sent it</button>
+      <button class="chip back" data-dir="in">I got paid back</button>
+    </div>
+  </div>
+  <div class="field"><label for="vmWho">Who</label><input id="vmWho" placeholder="Henry"></div>
+  <div class="field"><label for="vmAmt">Amount</label><input id="vmAmt" class="mono" inputmode="decimal" placeholder="0.00"></div>
+  <div class="row"><button class="btn primary" id="vmSave">Log it</button><button class="btn" data-close>Cancel</button></div>
+  <p class="quiet" id="vmHint"></p>
 </div>
 
 <!-- paste alerts -->
@@ -328,6 +355,19 @@
   <p class="quiet">Everything lives on this device only. Nothing is uploaded anywhere.</p>
 
   <div class="divider"></div>
+  <div class="field"><button class="btn" id="btnPaste">Paste alerts</button></div>
+  <p class="quiet">Backup for when the sync is down \u2014 paste alert text, one per line.</p>
+
+  <div class="divider"></div>
+  <div class="sub-head">Tap-to-pay sync</div>
+  <div class="field">
+    <label for="syncUrl">Sync link</label>
+    <input id="syncUrl" placeholder="https://script.google.com/...">
+    <button class="btn" id="saveSync" style="margin-top:8px">Save link</button>
+  </div>
+  <div class="field"><button class="btn" id="syncNow">Pull charges now</button></div>
+  <p class="quiet">Charges sent by your Apple Pay shortcut land in the tray automatically each time you open the app.</p>
+  <div class="divider"></div>
   <div class="sub-head">Monthly statement</div>
   <div class="field"><button class="btn" id="openBank">Open Capital One</button></div>
   <div class="field">
@@ -342,6 +382,15 @@
   </div>
   <p class="quiet">Download the CSV from your bank, then load it here. Charges already in the app get confirmed rather than added twice.</p>
   <div class="row" style="margin-top:12px"><button class="btn" data-close>Close</button></div>
+</div>
+
+<!-- envelope breakdown -->
+<div class="sheet" id="sheetEnv">
+  <h2 id="envTitle">Envelope</h2>
+  <div class="env-tot" id="envTot"></div>
+  <p class="quiet" id="envHint" style="margin-bottom:14px">Tap any charge to move it.</p>
+  <div id="envItems"></div>
+  <div class="row" style="margin-top:6px"><button class="btn" data-close>Close</button></div>
 </div>
 
 <!-- statement review -->
@@ -408,7 +457,10 @@
 
   /* ---------- derived ---------- */
   function inbox(){
-    return state.txns.filter(function(t){return t.type==="out"&&!t.env&&t.month===view;});
+    // unsorted charges show regardless of month — a statement import often
+    // carries charges that posted late from the previous month
+    return state.txns.filter(function(t){return t.type==="out"&&!t.env;})
+      .sort(function(a,b){return b.ts-a.ts;});
   }
   function spentIn(id){
     return state.txns.reduce(function(s,t){
@@ -479,7 +531,7 @@
       b.querySelector(".env-left").textContent=lim>0
         ? (sp>lim?money(sp-lim)+" over":money(lim-sp)+" left")
         : "no limit set";
-      b.addEventListener("click",function(){openEnvs();});
+      b.addEventListener("click",function(){openEnvBreakdown(e.id);});
       grid.appendChild(b);
     });
   }
@@ -543,11 +595,12 @@
     var tx=state.txns.find(function(t){return t.id===txId;});
     if(!tx) return;
     lastMove={id:txId,prev:tx.env||null};
-    tx.env=envId;
+    tx.env=envId||null;
     save().then(function(){
       var e=state.envelopes.find(function(x){return x.id===envId;});
       setTimeout(function(){render();},180);
-      toast(tx.who+" \u2192 "+(e?e.name:"envelope"));
+      if(envOpen&&$("sheetEnv").classList.contains("on")) openEnvBreakdown(envOpen);
+      toast(envId?(tx.who+" \u2192 "+(e?e.name:"envelope")):(tx.who+" \u2192 to sort"));
     });
   }
 
@@ -570,6 +623,12 @@
   function openAssign(tx){
     $("assignTitle").textContent=tx.who+" \u00b7 "+money(tx.amount);
     var c=$("assignChips"); c.innerHTML="";
+    if(tx.env){
+      var back=document.createElement("button");
+      back.className="chip back"; back.textContent="\u2190 To sort";
+      back.addEventListener("click",function(){assign(tx.id,null);hide();});
+      c.appendChild(back);
+    }
     state.envelopes.forEach(function(e){
       var b=document.createElement("button");
       b.className="chip"; b.textContent=e.name;
@@ -577,6 +636,38 @@
       c.appendChild(b);
     });
     show("sheetAssign");
+  }
+
+  var envOpen=null;
+  function openEnvBreakdown(id){
+    envOpen=id;
+    var e=state.envelopes.find(function(x){return x.id===id;});
+    if(!e) return;
+    var sp=spentIn(id), lim=e.limit||0;
+    $("envTitle").textContent=e.name;
+    $("envTot").innerHTML=money(sp)+' <span></span>';
+    $("envTot").querySelector("span").textContent=
+      lim>0?(sp>lim?(money(sp-lim)+" over "+money(lim)):(money(lim-sp)+" left of "+money(lim))):"no limit set";
+    var items=state.txns.filter(function(t){
+      return t.type==="out"&&t.env===id&&t.month===view;
+    }).sort(function(a,b){return b.ts-a.ts;});
+    var box=$("envItems"); box.innerHTML="";
+    $("envHint").style.display=items.length?"":"none";
+    if(!items.length){
+      box.innerHTML='<p class="quiet">Nothing filed here this month.</p>';
+    }
+    items.forEach(function(t){
+      var el=document.createElement("button");
+      el.className="item-row";
+      el.innerHTML='<span><span class="it-who"></span><span class="it-when"></span></span><span class="it-amt"></span>';
+      el.querySelector(".it-who").textContent=t.who;
+      el.querySelector(".it-when").textContent=
+        new Date(t.ts).toLocaleDateString(undefined,{month:"short",day:"numeric"})+(t.conf?" \u00b7 on statement":"");
+      el.querySelector(".it-amt").textContent=money(t.amount);
+      el.addEventListener("click",function(){openAssign(t);});
+      box.appendChild(el);
+    });
+    show("sheetEnv");
   }
 
   function openEnvs(){
@@ -804,6 +895,45 @@
       toast(added?(added+" added to sort"):"Statement reconciled",false);});
   }
 
+  /* ---------- tap-to-pay sync ---------- */
+  var syncing=false;
+  function pullCharges(loud){
+    if(syncing||!state.syncUrl) return Promise.resolve(0);
+    syncing=true;
+    var url=state.syncUrl+(state.syncUrl.indexOf("?")>-1?"&":"?")+"since="+(state.syncAt||0);
+    return fetch(url,{cache:"no-store"})
+      .then(function(r){return r.json();})
+      .then(function(list){
+        if(!Array.isArray(list)) throw 0;
+        var seen={},added=0,newest=state.syncAt||0;
+        state.txns.forEach(function(t){if(t.rid) seen[t.rid]=1;});
+        list.forEach(function(c){
+          var amt=Math.abs(parseFloat(c.amount));
+          if(!isFinite(amt)||amt<=0) return;
+          if(c.rid&&seen[c.rid]) return;
+          var when=c.ts?new Date(c.ts):new Date();
+          state.txns.push({
+            id:uid(),rid:c.rid||null,who:(c.who||"Purchase").slice(0,40),
+            amount:Math.round(amt*100)/100,type:"out",env:null,
+            ts:when.getTime(),month:monthKey(when)
+          });
+          added++;
+          if(c.ts&&c.ts>newest) newest=c.ts;
+        });
+        state.syncAt=newest;
+        syncing=false;
+        if(added) return save().then(function(){render();
+          toast(added+(added===1?" charge pulled in":" charges pulled in"),false);return added;});
+        if(loud) toast("Nothing new to pull",false);
+        return 0;
+      })
+      .catch(function(){
+        syncing=false;
+        if(loud) toast("Couldn't reach the sync link",false);
+        return 0;
+      });
+  }
+
   /* ---------- toast ---------- */
   var toastTimer=null;
   function toast(msg,undoable){
@@ -825,8 +955,32 @@
   $("btnAdd").addEventListener("click",function(){$("addWho").value="";$("addAmt").value="";show("sheetAdd");});
   $("btnIn").addEventListener("click",function(){$("inWho").value="";$("inAmt").value="";show("sheetIn");});
   $("btnPaste").addEventListener("click",function(){$("pasteBox").value="";show("sheetPaste");});
+  var vmDir="out";
+  function paintVm(){
+    Array.prototype.forEach.call(document.querySelectorAll("#vmDir .chip"),function(b){
+      b.classList.toggle("back",b.dataset.dir!==vmDir);
+    });
+    $("vmHint").textContent = vmDir==="out"
+      ? "Lands in the tray to file into an envelope."
+      : "Counts as money in for the month.";
+  }
+  Array.prototype.forEach.call(document.querySelectorAll("#vmDir .chip"),function(b){
+    b.addEventListener("click",function(){vmDir=b.dataset.dir;paintVm();});
+  });
+  $("btnVenmo").addEventListener("click",function(){
+    $("vmWho").value="";$("vmAmt").value="";vmDir="out";paintVm();show("sheetVenmo");
+  });
+  $("vmSave").addEventListener("click",function(){
+    var who=$("vmWho").value.trim();
+    var amt=parseFloat($("vmAmt").value.replace(/[^0-9.]/g,""));
+    if(!isFinite(amt)||amt<=0){toast("Enter an amount above zero",false);return;}
+    who = who ? ("Venmo \u00b7 "+who) : "Venmo";
+    addTxn(who,amt,vmDir);
+    save().then(function(){hide();render();
+      if(vmDir==="in") toast(who+" logged as money in",false);});
+  });
   $("editEnvs").addEventListener("click",openEnvs);
-  $("openMenu").addEventListener("click",function(){$("bankUrl").value=state.bankUrl||"";show("sheetMenu");});
+  $("openMenu").addEventListener("click",function(){$("bankUrl").value=state.bankUrl||"";$("syncUrl").value=state.syncUrl||"";show("sheetMenu");});
 
   $("addSave").addEventListener("click",function(){
     var who=$("addWho").value.trim()||"Purchase";
@@ -866,6 +1020,14 @@
     state.envelopes=kept;
     save().then(function(){hide();render();});
   });
+
+  $("saveSync").addEventListener("click",function(){
+    var u=$("syncUrl").value.trim();
+    if(u&&!/^https?:\/\//i.test(u)) u="https://"+u;
+    state.syncUrl=u;
+    save().then(function(){toast(u?"Sync link saved":"Sync link cleared",false);});
+  });
+  $("syncNow").addEventListener("click",function(){pullCharges(true);});
 
   $("openBank").addEventListener("click",function(){
     var u=(state.bankUrl||"https://www.capitalone.com/").trim();
@@ -920,6 +1082,10 @@
   store.get().then(function(d){
     state=(d&&d.envelopes)?d:seed();
     render();
+    pullCharges(false);
+  });
+  document.addEventListener("visibilitychange",function(){
+    if(!document.hidden&&state) pullCharges(false);
   });
 })();
 </script>
