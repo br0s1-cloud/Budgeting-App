@@ -208,6 +208,22 @@
   .env-row button{color:var(--slip-soft);padding:8px;font-size:16px;flex:none}
   .link{color:var(--manila);text-decoration:underline;text-underline-offset:3px;font-size:13px}
   .quiet{color:var(--slip-soft);font-size:12px;margin-top:10px}
+  .divider{height:1px;background:var(--hair);margin:18px 0 16px}
+  .sub-head{font-family:'Archivo Narrow',sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:.14em;font-size:11px;color:var(--manila);margin-bottom:10px}
+  .filepick{position:relative;overflow:hidden;display:block}
+  .filepick input[type=file]{position:absolute;inset:0;opacity:0;width:100%;height:100%;border:0;background:none}
+  .rev-group{margin-bottom:16px}
+  .rev-count{font-size:12px;color:var(--slip-soft);margin-bottom:8px}
+  .rev-row{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    background:var(--desk-3);border:1px solid var(--hair);border-radius:3px;
+    padding:11px 12px;margin-bottom:6px;width:100%;text-align:left;
+  }
+  .rev-row .rv-who{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rev-row .rv-note{font-size:11px;color:var(--slip-soft);margin-top:2px}
+  .rev-row .rv-amt{font-family:'IBM Plex Mono',monospace;font-size:14px;flex:none}
+  .rev-row.keep{border-color:var(--manila)}
+  .rev-row.keep .rv-note{color:var(--manila)}
   .toast{
     position:fixed;left:50%;transform:translate(-50%,20px);bottom:96px;z-index:70;
     background:var(--slip);color:var(--ink);border-radius:3px;padding:10px 14px;
@@ -310,7 +326,29 @@
   <div class="field"><label for="importBox">Restore from a backup</label><textarea id="importBox" placeholder="Paste backup text here"></textarea>
   <button class="btn" id="doImport" style="margin-top:8px">Restore</button></div>
   <p class="quiet">Everything lives on this device only. Nothing is uploaded anywhere.</p>
+
+  <div class="divider"></div>
+  <div class="sub-head">Monthly statement</div>
+  <div class="field"><button class="btn" id="openBank">Open Capital One</button></div>
+  <div class="field">
+    <label for="bankUrl">Bank link</label>
+    <input id="bankUrl" placeholder="https://...">
+    <button class="btn" id="saveBank" style="margin-top:8px">Save link</button>
+  </div>
+  <div class="field">
+    <label class="filepick btn" for="csvFile">Import a statement CSV
+      <input type="file" id="csvFile" accept=".csv,text/csv,text/plain">
+    </label>
+  </div>
+  <p class="quiet">Download the CSV from your bank, then load it here. Charges already in the app get confirmed rather than added twice.</p>
   <div class="row" style="margin-top:12px"><button class="btn" data-close>Close</button></div>
+</div>
+
+<!-- statement review -->
+<div class="sheet" id="sheetReview">
+  <h2>Statement review</h2>
+  <div id="revBody"></div>
+  <div class="row"><button class="btn primary" id="revApply">Apply</button><button class="btn" data-close>Cancel</button></div>
 </div>
 
 <div class="toast" id="toast"><span id="toastMsg"></span><button id="toastUndo">Undo</button></div>
@@ -593,6 +631,179 @@
     });
   }
 
+  /* ---------- statement import ---------- */
+  function splitCSV(text){
+    var rows=[],row=[],cur="",q=false,i,c;
+    for(i=0;i<text.length;i++){
+      c=text[i];
+      if(q){
+        if(c==='"'){ if(text[i+1]==='"'){cur+='"';i++;} else q=false; }
+        else cur+=c;
+      }else if(c==='"'){q=true;}
+      else if(c===","){row.push(cur);cur="";}
+      else if(c==="\n"||c==="\r"){
+        if(c==="\r"&&text[i+1]==="\n") i++;
+        row.push(cur);cur="";
+        if(row.length>1||row[0]!=="") rows.push(row);
+        row=[];
+      }else cur+=c;
+    }
+    row.push(cur); if(row.length>1||row[0]!=="") rows.push(row);
+    return rows;
+  }
+
+  function colIndex(head,words){
+    for(var i=0;i<head.length;i++){
+      var h=head[i].toLowerCase();
+      for(var j=0;j<words.length;j++) if(h.indexOf(words[j])>-1) return i;
+    }
+    return -1;
+  }
+
+  function parseDate(v){
+    v=(v||"").trim();
+    var m=v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if(m) return new Date(+m[1],+m[2]-1,+m[3]);
+    m=v.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})/);
+    if(m){var y=+m[3]; if(y<100) y+=2000; return new Date(y,+m[1]-1,+m[2]);}
+    var d=new Date(v);
+    return isNaN(d)?null:d;
+  }
+
+  function num(v){
+    var n=parseFloat(String(v||"").replace(/[^0-9.\-]/g,""));
+    return isFinite(n)?n:null;
+  }
+
+  function normMerch(s){
+    return String(s||"").toUpperCase()
+      .replace(/\b(SQ|TST|PAYPAL|POS|PURCHASE|DEBIT|CARD|RECURRING|PMT)\b/g," ")
+      .replace(/[^A-Z ]+/g," ")
+      .replace(/\s+/g," ").trim();
+  }
+  function merchAlike(a,b){
+    a=normMerch(a); b=normMerch(b);
+    if(!a||!b) return false;
+    if(a.indexOf(b)>-1||b.indexOf(a)>-1) return true;
+    var at=a.split(" ").filter(function(w){return w.length>2;});
+    var bt=b.split(" ").filter(function(w){return w.length>2;});
+    for(var i=0;i<at.length;i++) if(bt.indexOf(at[i])>-1) return true;
+    return false;
+  }
+  function daysApart(a,b){return Math.abs(a-b)/86400000;}
+
+  function readStatement(text){
+    var rows=splitCSV(text);
+    if(rows.length<2) return null;
+    var head=rows[0];
+    var iDate=colIndex(head,["transaction date","posted date","date"]);
+    var iWho=colIndex(head,["description","merchant","payee","name"]);
+    var iDeb=colIndex(head,["debit","withdrawal"]);
+    var iCred=colIndex(head,["credit","deposit"]);
+    var iAmt=colIndex(head,["amount"]);
+    if(iDate<0||iWho<0||(iDeb<0&&iAmt<0)) return null;
+    var out=[];
+    rows.slice(1).forEach(function(r){
+      if(!r[iDate]) return;
+      var d=parseDate(r[iDate]); if(!d) return;
+      var who=(r[iWho]||"").trim(); if(!who) return;
+      var amt=null,type="out";
+      if(iDeb>-1&&num(r[iDeb])){amt=Math.abs(num(r[iDeb]));type="out";}
+      else if(iCred>-1&&num(r[iCred])){amt=Math.abs(num(r[iCred]));type="in";}
+      else if(iAmt>-1){
+        var a=num(r[iAmt]); if(a===null||a===0) return;
+        amt=Math.abs(a); type=a<0?"out":"in";
+      }
+      if(!amt) return;
+      if(type==="in"&&/payment|autopay|thank\s*you|cardmember/i.test(who)) return;
+      out.push({who:who.slice(0,40),amount:Math.round(amt*100)/100,type:type,date:d});
+    });
+    return out;
+  }
+
+  var pending=null;
+
+  function reconcile(rows){
+    var res={matched:[],changed:[],fresh:[]};
+    var claimed={};
+    rows.forEach(function(r){
+      var exactHit=null,nearHit=null;
+      state.txns.forEach(function(t){
+        if(claimed[t.id]||t.type!==r.type) return;
+        var gap=daysApart(new Date(t.ts),r.date);
+        if(gap>6) return;
+        if(Math.abs(t.amount-r.amount)<0.005){ if(!exactHit) exactHit=t; }
+        else if(merchAlike(t.who,r.who)&&!nearHit) nearHit=t;
+      });
+      if(exactHit){claimed[exactHit.id]=1;res.matched.push({row:r,txn:exactHit});}
+      else if(nearHit){claimed[nearHit.id]=1;res.changed.push({row:r,txn:nearHit,accept:true});}
+      else res.fresh.push({row:r});
+    });
+    return res;
+  }
+
+  function renderReview(){
+    var b=$("revBody"); b.innerHTML="";
+    function group(title,note,items,build){
+      if(!items.length) return;
+      var g=document.createElement("div"); g.className="rev-group";
+      g.innerHTML='<div class="sub-head"></div><div class="rev-count"></div>';
+      g.querySelector(".sub-head").textContent=title;
+      g.querySelector(".rev-count").textContent=items.length+" \u00b7 "+note;
+      items.forEach(function(it,i){g.appendChild(build(it,i));});
+      b.appendChild(g);
+    }
+    function line(who,amt,note,cls){
+      var el=document.createElement(cls?"button":"div");
+      el.className="rev-row"+(cls?" "+cls:"");
+      el.innerHTML='<span><span class="rv-who"></span><span class="rv-note"></span></span><span class="rv-amt"></span>';
+      el.querySelector(".rv-who").textContent=who;
+      el.querySelector(".rv-note").textContent=note;
+      el.querySelector(".rv-amt").textContent=money(amt);
+      return el;
+    }
+    group("Already logged","confirmed, nothing added",pending.matched,function(it){
+      return line(it.txn.who,it.txn.amount,"matches your entry");
+    });
+    group("Amount changed","tap to keep yours instead",pending.changed,function(it){
+      var el=line(it.row.who,it.accept?it.row.amount:it.txn.amount,
+        it.accept?("was "+money(it.txn.amount)+" \u2014 using statement"):("statement says "+money(it.row.amount)+" \u2014 keeping yours"),
+        it.accept?"":"keep");
+      el.addEventListener("click",function(){it.accept=!it.accept;renderReview();});
+      return el;
+    });
+    group("New","tap to skip one",pending.fresh,function(it){
+      var el=line(it.row.who,it.row.amount,
+        it.skip?"skipping":(it.row.type==="in"?"money in":"to sort"),
+        it.skip?"keep":"");
+      el.addEventListener("click",function(){it.skip=!it.skip;renderReview();});
+      return el;
+    });
+    if(!pending.matched.length&&!pending.changed.length&&!pending.fresh.length){
+      b.innerHTML='<p class="quiet">Nothing new in this file.</p>';
+    }
+  }
+
+  function applyReview(){
+    var added=0;
+    pending.matched.forEach(function(it){it.txn.conf=true;});
+    pending.changed.forEach(function(it){
+      if(it.accept) it.txn.amount=it.row.amount;
+      it.txn.conf=true;
+    });
+    pending.fresh.forEach(function(it){
+      if(it.skip) return;
+      state.txns.push({
+        id:uid(),who:it.row.who,amount:it.row.amount,type:it.row.type,
+        env:null,ts:it.row.date.getTime(),month:monthKey(it.row.date),conf:true
+      });
+      added++;
+    });
+    pending=null;
+    save().then(function(){hide();render();
+      toast(added?(added+" added to sort"):"Statement reconciled",false);});
+  }
+
   /* ---------- toast ---------- */
   var toastTimer=null;
   function toast(msg,undoable){
@@ -615,7 +826,7 @@
   $("btnIn").addEventListener("click",function(){$("inWho").value="";$("inAmt").value="";show("sheetIn");});
   $("btnPaste").addEventListener("click",function(){$("pasteBox").value="";show("sheetPaste");});
   $("editEnvs").addEventListener("click",openEnvs);
-  $("openMenu").addEventListener("click",function(){show("sheetMenu");});
+  $("openMenu").addEventListener("click",function(){$("bankUrl").value=state.bankUrl||"";show("sheetMenu");});
 
   $("addSave").addEventListener("click",function(){
     var who=$("addWho").value.trim()||"Purchase";
@@ -655,6 +866,33 @@
     state.envelopes=kept;
     save().then(function(){hide();render();});
   });
+
+  $("openBank").addEventListener("click",function(){
+    var u=(state.bankUrl||"https://www.capitalone.com/").trim();
+    window.open(u,"_blank");
+  });
+  $("saveBank").addEventListener("click",function(){
+    var u=$("bankUrl").value.trim();
+    if(u&&!/^https?:\/\//i.test(u)) u="https://"+u;
+    state.bankUrl=u;
+    save().then(function(){toast(u?"Link saved":"Link cleared",false);});
+  });
+  $("csvFile").addEventListener("change",function(ev){
+    var f=ev.target.files&&ev.target.files[0]; if(!f) return;
+    var fr=new FileReader();
+    fr.onload=function(){
+      ev.target.value="";
+      var rows=readStatement(String(fr.result));
+      if(!rows){toast("Couldn't find dates and amounts in that file",false);return;}
+      if(!rows.length){toast("No transactions in that file",false);return;}
+      pending=reconcile(rows);
+      renderReview();
+      show("sheetReview");
+    };
+    fr.onerror=function(){toast("Couldn't read that file",false);};
+    fr.readAsText(f);
+  });
+  $("revApply").addEventListener("click",function(){if(pending) applyReview();});
 
   $("prevMonth").addEventListener("click",function(){view=shiftMonth(view,-1);render();});
   $("nextMonth").addEventListener("click",function(){view=shiftMonth(view,1);render();});
