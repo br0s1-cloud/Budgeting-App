@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Envelopes">
+<meta name="theme-color" content="#22262B">
+<title>Envelopes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=Archivo+Narrow:wght@600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --desk:#22262B;
+    --desk-2:#2B3037;
+    --desk-3:#343A42;
+    --manila:#D9C79B;
+    --manila-dk:#BFA972;
+    --manila-ink:#4A3E22;
+    --slip:#F6F4EF;
+    --ink:#1C1F23;
+    --ink-soft:#6B7178;
+    --stamp:#2E7A61;
+    --red:#C4483F;
+    --hair:rgba(246,244,239,.14);
+    --lift:0 6px 18px rgba(0,0,0,.42);
+    --pad:16px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:var(--desk);
+    color:var(--slip);
+    font-family:'Archivo',system-ui,-apple-system,sans-serif;
+    font-size:15px;
+    line-height:1.35;
+    overscroll-behavior-y:none;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+  }
+  button,input,select,textarea{font:inherit;color:inherit}
+  button{background:none;border:0;padding:0;cursor:pointer}
+
+  .label{
+    font-family:'Archivo Narrow',Archivo,sans-serif;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:.16em;
+    font-size:11px;
+  }
+  .mono{font-family:'IBM Plex Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+
+  .app{
+    max-width:520px;margin:0 auto;
+    min-height:100dvh;
+    display:flex;flex-direction:column;
+    padding:0 var(--pad) calc(84px + env(safe-area-inset-bottom));
+  }
+
+  /* ---------- header ---------- */
+  .top{padding:18px 0 14px;display:flex;align-items:flex-start;gap:12px}
+  .top-l{flex:1;min-width:0}
+  .month{display:flex;align-items:center;gap:8px;color:var(--manila)}
+  .month button{color:var(--manila);opacity:.6;padding:2px 6px;font-size:13px}
+  .month button:hover{opacity:1}
+  .big{
+    font-family:'IBM Plex Mono',monospace;font-weight:600;
+    font-size:40px;letter-spacing:-.02em;margin-top:4px;line-height:1
+  }
+  .big.over{color:var(--red)}
+  .sub{color:var(--ink-soft);font-size:13px;margin-top:6px}
+  .sub b{color:var(--slip);font-weight:500}
+  .menu{
+    width:38px;height:38px;border:1px solid var(--hair);border-radius:50%;
+    display:grid;place-items:center;color:var(--slip);flex:none
+  }
+
+  .rule{height:1px;background:var(--hair);margin:2px 0 14px}
+  .sec-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px}
+  .sec-head .label{color:var(--ink-soft)}
+
+  /* ---------- slips ---------- */
+  .tray{min-height:104px;position:relative;margin-bottom:22px}
+  .slip{
+    position:absolute;left:0;right:0;top:0;
+    background:var(--slip);color:var(--ink);
+    border-radius:3px;
+    padding:12px 14px 14px;
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    box-shadow:var(--lift);
+    text-align:left;width:100%;
+    touch-action:none;
+    transition:transform .18s ease, opacity .18s ease;
+  }
+  .slip::after{
+    content:"";position:absolute;left:10px;right:10px;bottom:6px;height:1px;
+    background:repeating-linear-gradient(90deg,var(--ink-soft) 0 3px,transparent 3px 7px);
+    opacity:.35;
+  }
+  .slip .who{font-weight:600;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .slip .when{font-size:11px;color:var(--ink-soft);margin-top:3px;letter-spacing:.04em}
+  .slip .amt{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:19px;flex:none}
+  .slip[data-depth="1"]{transform:translateY(7px) scale(.97);opacity:.75;z-index:1}
+  .slip[data-depth="2"]{transform:translateY(14px) scale(.94);opacity:.45;z-index:0}
+  .slip[data-depth="0"]{z-index:3}
+  .slip.dragging{transition:none;box-shadow:0 18px 34px rgba(0,0,0,.5);cursor:grabbing}
+  .slip.gone{opacity:0;transform:scale(.7) rotate(-6deg)}
+  .hint{color:var(--ink-soft);font-size:12px;text-align:center;padding:34px 0}
+
+  /* ---------- envelopes ---------- */
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .env{
+    position:relative;overflow:hidden;
+    background:var(--manila);color:var(--manila-ink);
+    border-radius:3px;min-height:84px;
+    padding:12px 12px 10px;text-align:left;
+    display:flex;flex-direction:column;justify-content:space-between;
+    box-shadow:0 2px 0 rgba(0,0,0,.25);
+    transition:transform .12s ease, box-shadow .12s ease;
+  }
+  .env::before{ /* flap */
+    content:"";position:absolute;top:0;left:0;right:0;height:30px;
+    background:var(--manila-dk);
+    clip-path:polygon(0 0,100% 0,50% 100%);
+    opacity:.5;pointer-events:none;
+  }
+  .env-fill{
+    position:absolute;left:0;right:0;bottom:0;
+    background:var(--manila-dk);opacity:.55;pointer-events:none;
+    transition:height .35s cubic-bezier(.2,.8,.2,1);
+  }
+  .env-fill.full{background:var(--red);opacity:.75}
+  .env-name,.env-fig,.env-left{position:relative}
+  .env-name{font-family:'Archivo Narrow',sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:.1em;font-size:12px}
+  .env-fig{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:17px;margin-top:14px}
+  .env-left{font-size:11px;opacity:.7;margin-top:2px;letter-spacing:.03em}
+  .env.hot{transform:translateY(-3px) scale(1.03);box-shadow:0 0 0 2px var(--slip),0 10px 22px rgba(0,0,0,.4)}
+  .env.hit{animation:stamp .38s ease}
+  @keyframes stamp{40%{transform:scale(.95)}100%{transform:scale(1)}}
+  .env.empty-limit .env-fig{opacity:.45}
+
+  /* ---------- bottom bar ---------- */
+  .bar{
+    position:fixed;left:0;right:0;bottom:0;z-index:40;
+    background:linear-gradient(to top,var(--desk) 68%,rgba(34,38,43,0));
+    padding:14px var(--pad) calc(14px + env(safe-area-inset-bottom));
+    display:flex;gap:8px;max-width:520px;margin:0 auto;
+  }
+  .btn{
+    flex:1;border:1px solid var(--hair);border-radius:3px;
+    padding:13px 8px;text-align:center;
+    font-family:'Archivo Narrow',sans-serif;font-weight:700;
+    text-transform:uppercase;letter-spacing:.12em;font-size:11px;
+    background:var(--desk-2);
+  }
+  .btn.primary{background:var(--slip);color:var(--ink);border-color:var(--slip)}
+  .btn:active{transform:translateY(1px)}
+
+  /* ---------- sheets ---------- */
+  .scrim{position:fixed;inset:0;background:rgba(12,14,16,.6);z-index:50;opacity:0;pointer-events:none;transition:opacity .2s}
+  .scrim.on{opacity:1;pointer-events:auto}
+  .sheet{
+    position:fixed;left:0;right:0;bottom:0;z-index:60;
+    background:var(--desk-2);border-top:1px solid var(--hair);
+    border-radius:14px 14px 0 0;
+    max-width:520px;margin:0 auto;
+    padding:18px var(--pad) calc(20px + env(safe-area-inset-bottom));
+    transform:translateY(102%);transition:transform .24s cubic-bezier(.2,.8,.2,1);
+    max-height:88dvh;overflow-y:auto;
+  }
+  .sheet.on{transform:translateY(0)}
+  .sheet h2{font-family:'Archivo Narrow',sans-serif;text-transform:uppercase;letter-spacing:.14em;font-size:13px;margin:0 0 14px;color:var(--manila)}
+  .field{margin-bottom:12px}
+  .field label{display:block;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:6px;font-family:'Archivo Narrow',sans-serif;font-weight:700}
+  .field input,.field textarea,.field select{
+    width:100%;background:var(--desk-3);border:1px solid var(--hair);border-radius:3px;
+    padding:12px;color:var(--slip);
+  }
+  .field textarea{min-height:120px;resize:vertical;font-family:'IBM Plex Mono',monospace;font-size:13px}
+  .field input.mono{font-family:'IBM Plex Mono',monospace}
+  .row{display:flex;gap:8px}
+  .row>*{flex:1}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{
+    background:var(--manila);color:var(--manila-ink);border-radius:3px;
+    padding:11px 13px;font-family:'Archivo Narrow',sans-serif;font-weight:700;
+    text-transform:uppercase;letter-spacing:.09em;font-size:12px;
+  }
+  .env-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+  .env-row input:first-child{flex:2}
+  .env-row input:nth-child(2){flex:1}
+  .env-row button{color:var(--ink-soft);padding:8px;font-size:16px;flex:none}
+  .link{color:var(--manila);text-decoration:underline;text-underline-offset:3px;font-size:13px}
+  .quiet{color:var(--ink-soft);font-size:12px;margin-top:10px}
+  .toast{
+    position:fixed;left:50%;transform:translate(-50%,20px);bottom:96px;z-index:70;
+    background:var(--slip);color:var(--ink);border-radius:3px;padding:10px 14px;
+    font-size:13px;display:flex;align-items:center;gap:12px;
+    opacity:0;pointer-events:none;transition:all .2s;box-shadow:var(--lift);
+  }
+  .toast.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+  .toast button{font-weight:600;color:var(--stamp);text-transform:uppercase;font-size:11px;letter-spacing:.1em}
+  :focus-visible{outline:2px solid var(--manila);outline-offset:2px}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="top-l">
+      <div class="month label">
+        <button id="prevMonth" aria-label="Previous month">&#9664;</button>
+        <span id="monthName">—</span>
+        <button id="nextMonth" aria-label="Next month">&#9654;</button>
+      </div>
+      <div class="big mono" id="bigNum">$0</div>
+      <div class="sub" id="subLine">Set up your envelopes to get started.</div>
+    </div>
+    <button class="menu" id="openMenu" aria-label="Settings">&#9776;</button>
+  </header>
+
+  <div class="rule"></div>
+
+  <section>
+    <div class="sec-head">
+      <span class="label">To sort</span>
+      <span class="label" id="inboxCount">0</span>
+    </div>
+    <div class="tray" id="tray"></div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="label">Envelopes</span>
+      <button class="label" id="editEnvs" style="color:var(--manila)">Edit</button>
+    </div>
+    <div class="grid" id="grid"></div>
+  </section>
+</div>
+
+<div class="bar">
+  <button class="btn primary" id="btnAdd">+ Purchase</button>
+  <button class="btn" id="btnPaste">Paste alerts</button>
+  <button class="btn" id="btnIn">Money in</button>
+</div>
+
+<div class="scrim" id="scrim"></div>
+
+<!-- assign sheet -->
+<div class="sheet" id="sheetAssign">
+  <h2 id="assignTitle">Drop it in</h2>
+  <div class="chips" id="assignChips"></div>
+</div>
+
+<!-- add purchase -->
+<div class="sheet" id="sheetAdd">
+  <h2>Add a purchase</h2>
+  <div class="field"><label for="addWho">Where</label><input id="addWho" placeholder="Wawa"></div>
+  <div class="field"><label for="addAmt">Amount</label><input id="addAmt" class="mono" inputmode="decimal" placeholder="0.00"></div>
+  <div class="row"><button class="btn primary" id="addSave">Add to sort</button><button class="btn" data-close>Cancel</button></div>
+</div>
+
+<!-- money in -->
+<div class="sheet" id="sheetIn">
+  <h2>Money in</h2>
+  <div class="field"><label for="inWho">Source</label><input id="inWho" placeholder="Paycheck"></div>
+  <div class="field"><label for="inAmt">Amount</label><input id="inAmt" class="mono" inputmode="decimal" placeholder="0.00"></div>
+  <div class="row"><button class="btn primary" id="inSave">Log it</button><button class="btn" data-close>Cancel</button></div>
+</div>
+
+<!-- paste alerts -->
+<div class="sheet" id="sheetPaste">
+  <h2>Paste alerts</h2>
+  <div class="field">
+    <label for="pasteBox">One alert per line</label>
+    <textarea id="pasteBox" placeholder="A $24.31 transaction was charged to your card ending in 1234 at CHIPOTLE"></textarea>
+  </div>
+  <div class="row"><button class="btn primary" id="pasteSave">Read them</button><button class="btn" data-close>Cancel</button></div>
+  <p class="quiet">Pulls the dollar amount and the merchant out of each line, then stacks them in the tray to sort.</p>
+</div>
+
+<!-- envelopes editor -->
+<div class="sheet" id="sheetEnvs">
+  <h2>Envelopes &amp; limits</h2>
+  <div id="envRows"></div>
+  <button class="link" id="addEnvRow" style="margin:6px 0 14px">+ Add an envelope</button>
+  <div class="row"><button class="btn primary" id="envsSave">Save</button><button class="btn" data-close>Cancel</button></div>
+</div>
+
+<!-- menu -->
+<div class="sheet" id="sheetMenu">
+  <h2>Settings</h2>
+  <div class="field"><button class="btn" id="doExport">Export a backup</button></div>
+  <div class="field"><label for="importBox">Restore from a backup</label><textarea id="importBox" placeholder="Paste backup text here"></textarea>
+  <button class="btn" id="doImport" style="margin-top:8px">Restore</button></div>
+  <p class="quiet">Everything lives on this device only. Nothing is uploaded anywhere.</p>
+  <div class="row" style="margin-top:12px"><button class="btn" data-close>Close</button></div>
+</div>
+
+<div class="toast" id="toast"><span id="toastMsg"></span><button id="toastUndo">Undo</button></div>
+
+<script>
+(function(){
+  "use strict";
+  var KEY="envelopes:v1", mem=null;
+
+  var store={
+    get:function(){
+      if(window.storage&&window.storage.get){
+        return window.storage.get(KEY).then(function(r){
+          return r&&r.value?JSON.parse(r.value):null;
+        }).catch(function(){return null;});
+      }
+      try{var v=localStorage.getItem(KEY);return Promise.resolve(v?JSON.parse(v):null);}
+      catch(e){return Promise.resolve(mem);}
+    },
+    set:function(d){
+      var s=JSON.stringify(d); mem=d;
+      if(window.storage&&window.storage.set){
+        return window.storage.set(KEY,s).catch(function(){});
+      }
+      try{localStorage.setItem(KEY,s);}catch(e){}
+      return Promise.resolve();
+    }
+  };
+
+  var state=null, view=monthKey(new Date()), lastMove=null;
+
+  function monthKey(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");}
+  function monthName(k){
+    var p=k.split("-"), d=new Date(+p[0],+p[1]-1,1);
+    return d.toLocaleDateString(undefined,{month:"long",year:"numeric"});
+  }
+  function uid(){return Math.random().toString(36).slice(2,10);}
+  function money(n){
+    return (n<0?"-":"")+"$"+Math.abs(n).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+  }
+  function short(n){
+    return Math.round(n).toLocaleString();
+  }
+
+  function seed(){
+    return {v:1,envelopes:[
+      {id:uid(),name:"Rent",limit:0},
+      {id:uid(),name:"Groceries",limit:0},
+      {id:uid(),name:"Gas",limit:0},
+      {id:uid(),name:"Eating out",limit:0},
+      {id:uid(),name:"Subscriptions",limit:0},
+      {id:uid(),name:"Fun",limit:0}
+    ],txns:[]};
+  }
+
+  function save(){return store.set(state);}
+
+  /* ---------- derived ---------- */
+  function inbox(){
+    return state.txns.filter(function(t){return t.type==="out"&&!t.env&&t.month===view;});
+  }
+  function spentIn(id){
+    return state.txns.reduce(function(s,t){
+      return s+((t.type==="out"&&t.env===id&&t.month===view)?t.amount:0);},0);
+  }
+  function totals(){
+    var budget=state.envelopes.reduce(function(s,e){return s+(e.limit||0);},0);
+    var spent=state.txns.reduce(function(s,t){return s+((t.type==="out"&&t.env&&t.month===view)?t.amount:0);},0);
+    var income=state.txns.reduce(function(s,t){return s+((t.type==="in"&&t.month===view)?t.amount:0);},0);
+    return {budget:budget,spent:spent,income:income};
+  }
+
+  /* ---------- render ---------- */
+  var $=function(id){return document.getElementById(id);};
+
+  function render(){
+    $("monthName").textContent=monthName(view);
+    var t=totals(), left=t.budget-t.spent;
+    var big=$("bigNum");
+    big.textContent=t.budget>0?money(left):money(-t.spent);
+    big.classList.toggle("over",left<0);
+
+    var sub=$("subLine");
+    if(t.budget===0){
+      sub.innerHTML='Tap <b>Edit</b> to set a limit on each envelope.';
+    }else if(t.income>0&&t.income<t.budget){
+      sub.innerHTML="Left of <b>"+money(t.budget)+"</b> budgeted \u00b7 only <b>"+money(t.income)+"</b> came in this month";
+    }else{
+      sub.innerHTML="Left of <b>"+money(t.budget)+"</b> budgeted \u00b7 <b>"+money(t.income)+"</b> in";
+    }
+
+    var box=inbox();
+    $("inboxCount").textContent=box.length;
+    var tray=$("tray"); tray.innerHTML="";
+    if(!box.length){
+      var h=document.createElement("p");
+      h.className="hint";
+      h.textContent="Nothing waiting. Add a purchase or paste your alerts.";
+      tray.appendChild(h);
+    }else{
+      box.slice(0,3).forEach(function(tx,i){
+        var s=document.createElement("button");
+        s.className="slip"; s.dataset.depth=i; s.dataset.id=tx.id;
+        s.setAttribute("aria-label","Sort "+tx.who+" "+money(tx.amount));
+        s.innerHTML='<span><span class="who"></span><span class="when"></span></span><span class="amt"></span>';
+        s.querySelector(".who").textContent=tx.who;
+        s.querySelector(".when").textContent=new Date(tx.ts).toLocaleDateString(undefined,{month:"short",day:"numeric"});
+        s.querySelector(".amt").textContent=money(tx.amount);
+        tray.appendChild(s);
+        if(i===0) armDrag(s,tx);
+      });
+    }
+
+    var grid=$("grid"); grid.innerHTML="";
+    state.envelopes.forEach(function(e){
+      var sp=spentIn(e.id), lim=e.limit||0;
+      var pct=lim>0?Math.min(100,Math.round(sp/lim*100)):0;
+      var b=document.createElement("button");
+      b.className="env"+(lim===0?" empty-limit":"");
+      b.dataset.id=e.id;
+      b.innerHTML='<span class="env-fill"></span><span class="env-name"></span>'+
+        '<span><span class="env-fig mono"></span><span class="env-left"></span></span>';
+      b.querySelector(".env-name").textContent=e.name;
+      var fill=b.querySelector(".env-fill");
+      fill.style.height=pct+"%";
+      if(lim>0&&sp>lim) fill.classList.add("full");
+      b.querySelector(".env-fig").textContent=lim>0?(short(sp)+" / "+short(lim)):short(sp);
+      b.querySelector(".env-left").textContent=lim>0
+        ? (sp>lim?money(sp-lim)+" over":money(lim-sp)+" left")
+        : "no limit set";
+      b.addEventListener("click",function(){openEnvs();});
+      grid.appendChild(b);
+    });
+  }
+
+  /* ---------- drag ---------- */
+  function armDrag(el,tx){
+    var startX=0,startY=0,moved=false,hot=null;
+    el.addEventListener("pointerdown",function(ev){
+      if(ev.button&&ev.button!==0) return;
+      startX=ev.clientX; startY=ev.clientY; moved=false;
+      var r=el.getBoundingClientRect();
+      el.setPointerCapture(ev.pointerId);
+      el.classList.add("dragging");
+      el.style.position="fixed";
+      el.style.left=r.left+"px"; el.style.top=r.top+"px";
+      el.style.width=r.width+"px"; el.style.right="auto";
+      el.style.transform="none";
+
+      function move(e){
+        var dx=e.clientX-startX, dy=e.clientY-startY;
+        if(!moved&&Math.abs(dx)+Math.abs(dy)>6) moved=true;
+        el.style.transform="translate("+dx+"px,"+dy+"px) rotate("+Math.max(-5,Math.min(5,dx/18))+"deg)";
+        el.style.pointerEvents="none";
+        var under=document.elementFromPoint(e.clientX,e.clientY);
+        el.style.pointerEvents="";
+        var env=under&&under.closest?under.closest(".env"):null;
+        if(env!==hot){
+          if(hot) hot.classList.remove("hot");
+          hot=env; if(hot) hot.classList.add("hot");
+        }
+      }
+      function up(e){
+        el.removeEventListener("pointermove",move);
+        el.removeEventListener("pointerup",up);
+        el.removeEventListener("pointercancel",up);
+        el.classList.remove("dragging");
+        if(hot){
+          var id=hot.dataset.id;
+          hot.classList.remove("hot"); hot.classList.add("hit");
+          el.classList.add("gone");
+          assign(tx.id,id);
+        }else if(!moved){
+          openAssign(tx);
+          reset();
+        }else{
+          reset();
+        }
+        hot=null;
+      }
+      function reset(){
+        el.style.position=""; el.style.left=""; el.style.top="";
+        el.style.width=""; el.style.right=""; el.style.transform="";
+      }
+      el.addEventListener("pointermove",move);
+      el.addEventListener("pointerup",up);
+      el.addEventListener("pointercancel",up);
+    });
+  }
+
+  function assign(txId,envId){
+    var tx=state.txns.find(function(t){return t.id===txId;});
+    if(!tx) return;
+    lastMove={id:txId,prev:tx.env||null};
+    tx.env=envId;
+    save().then(function(){
+      var e=state.envelopes.find(function(x){return x.id===envId;});
+      setTimeout(function(){render();},180);
+      toast(tx.who+" \u2192 "+(e?e.name:"envelope"));
+    });
+  }
+
+  /* ---------- sheets ---------- */
+  var openSheet=null;
+  function show(id){
+    if(openSheet) openSheet.classList.remove("on");
+    openSheet=$(id); openSheet.classList.add("on");
+    $("scrim").classList.add("on");
+  }
+  function hide(){
+    if(openSheet) openSheet.classList.remove("on");
+    openSheet=null; $("scrim").classList.remove("on");
+  }
+  $("scrim").addEventListener("click",hide);
+  Array.prototype.forEach.call(document.querySelectorAll("[data-close]"),function(b){
+    b.addEventListener("click",hide);
+  });
+
+  function openAssign(tx){
+    $("assignTitle").textContent=tx.who+" \u00b7 "+money(tx.amount);
+    var c=$("assignChips"); c.innerHTML="";
+    state.envelopes.forEach(function(e){
+      var b=document.createElement("button");
+      b.className="chip"; b.textContent=e.name;
+      b.addEventListener("click",function(){assign(tx.id,e.id);hide();});
+      c.appendChild(b);
+    });
+    show("sheetAssign");
+  }
+
+  function openEnvs(){
+    var wrap=$("envRows"); wrap.innerHTML="";
+    state.envelopes.forEach(function(e){addEnvRow(e.name,e.limit,e.id);});
+    show("sheetEnvs");
+  }
+  function addEnvRow(name,limit,id){
+    var row=document.createElement("div");
+    row.className="env-row"; row.dataset.id=id||"";
+    row.innerHTML='<input class="nm" placeholder="Name"><input class="lm mono" inputmode="decimal" placeholder="Limit"><button aria-label="Remove">&times;</button>';
+    row.querySelector(".nm").value=name||"";
+    row.querySelector(".lm").value=limit?String(limit):"";
+    row.querySelector("button").addEventListener("click",function(){row.remove();});
+    $("envRows").appendChild(row);
+  }
+
+  /* ---------- parsing ---------- */
+  function parseAlerts(text){
+    var out=[];
+    text.split(/\r?\n/).forEach(function(line){
+      line=line.trim(); if(!line) return;
+      var m=line.match(/\$\s?([\d,]+(?:\.\d{1,2})?)/);
+      if(!m) return;
+      var amt=parseFloat(m[1].replace(/,/g,""));
+      if(!isFinite(amt)||amt<=0) return;
+      var who="";
+      var at=line.match(/\b(?:at|to|from)\s+(.+)$/i);
+      if(at) who=at[1];
+      else who=line.replace(m[0],"");
+      who=who
+        .replace(/\bon\s+\w{3,9}\s+\d{1,2}.*$/i,"")
+        .replace(/\bwas\b.*$/i,"")
+        .replace(/\bending in\s*\d+.*$/i,"")
+        .replace(/\byour\b.*$/i,"")
+        .replace(/[.,;]+\s*$/,"")
+        .replace(/\s{2,}/g," ")
+        .trim();
+      if(!who) who="Purchase";
+      if(who===who.toUpperCase()){
+        who=who.toLowerCase().replace(/\b[a-z]/g,function(c){return c.toUpperCase();});
+      }
+      out.push({who:who.slice(0,40),amount:amt});
+    });
+    return out;
+  }
+
+  function addTxn(who,amount,type){
+    state.txns.push({
+      id:uid(),who:who,amount:amount,type:type||"out",
+      env:null,ts:Date.now(),month:view
+    });
+  }
+
+  /* ---------- toast ---------- */
+  var toastTimer=null;
+  function toast(msg,undoable){
+    $("toastMsg").textContent=msg;
+    $("toastUndo").style.display=(undoable===false)?"none":"";
+    $("toast").classList.add("on");
+    clearTimeout(toastTimer);
+    toastTimer=setTimeout(function(){$("toast").classList.remove("on");},4000);
+  }
+  $("toastUndo").addEventListener("click",function(){
+    if(!lastMove) return;
+    var tx=state.txns.find(function(t){return t.id===lastMove.id;});
+    if(tx){tx.env=lastMove.prev;save().then(render);}
+    lastMove=null;
+    $("toast").classList.remove("on");
+  });
+
+  /* ---------- wiring ---------- */
+  $("btnAdd").addEventListener("click",function(){$("addWho").value="";$("addAmt").value="";show("sheetAdd");});
+  $("btnIn").addEventListener("click",function(){$("inWho").value="";$("inAmt").value="";show("sheetIn");});
+  $("btnPaste").addEventListener("click",function(){$("pasteBox").value="";show("sheetPaste");});
+  $("editEnvs").addEventListener("click",openEnvs);
+  $("openMenu").addEventListener("click",function(){show("sheetMenu");});
+
+  $("addSave").addEventListener("click",function(){
+    var who=$("addWho").value.trim()||"Purchase";
+    var amt=parseFloat($("addAmt").value.replace(/[^0-9.]/g,""));
+    if(!isFinite(amt)||amt<=0){toast("Enter an amount above zero",false);return;}
+    addTxn(who,amt,"out"); save().then(function(){hide();render();});
+  });
+
+  $("inSave").addEventListener("click",function(){
+    var who=$("inWho").value.trim()||"Deposit";
+    var amt=parseFloat($("inAmt").value.replace(/[^0-9.]/g,""));
+    if(!isFinite(amt)||amt<=0){toast("Enter an amount above zero",false);return;}
+    addTxn(who,amt,"in"); save().then(function(){hide();render();toast(who+" logged",false);});
+  });
+
+  $("pasteSave").addEventListener("click",function(){
+    var found=parseAlerts($("pasteBox").value);
+    if(!found.length){toast("No dollar amounts found in that text",false);return;}
+    found.forEach(function(f){addTxn(f.who,f.amount,"out");});
+    save().then(function(){hide();render();toast(found.length+" waiting to sort",false);});
+  });
+
+  $("addEnvRow").addEventListener("click",function(){addEnvRow("",0,"");});
+
+  $("envsSave").addEventListener("click",function(){
+    var rows=document.querySelectorAll("#envRows .env-row");
+    var kept=[];
+    Array.prototype.forEach.call(rows,function(r){
+      var nm=r.querySelector(".nm").value.trim();
+      if(!nm) return;
+      var lm=parseFloat(r.querySelector(".lm").value.replace(/[^0-9.]/g,""));
+      kept.push({id:r.dataset.id||uid(),name:nm,limit:isFinite(lm)?lm:0});
+    });
+    if(!kept.length){toast("Keep at least one envelope",false);return;}
+    var live={}; kept.forEach(function(e){live[e.id]=1;});
+    state.txns.forEach(function(t){if(t.env&&!live[t.env]) t.env=null;});
+    state.envelopes=kept;
+    save().then(function(){hide();render();});
+  });
+
+  $("prevMonth").addEventListener("click",function(){view=shiftMonth(view,-1);render();});
+  $("nextMonth").addEventListener("click",function(){view=shiftMonth(view,1);render();});
+  function shiftMonth(k,by){
+    var p=k.split("-"), d=new Date(+p[0],+p[1]-1+by,1);
+    return monthKey(d);
+  }
+
+  $("doExport").addEventListener("click",function(){
+    var blob=new Blob([JSON.stringify(state)],{type:"application/json"});
+    var a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download="envelopes-backup.json";
+    document.body.appendChild(a); a.click(); a.remove();
+    toast("Backup downloaded",false);
+  });
+  $("doImport").addEventListener("click",function(){
+    try{
+      var d=JSON.parse($("importBox").value);
+      if(!d.envelopes||!d.txns) throw 0;
+      state=d; save().then(function(){hide();render();toast("Backup restored",false);});
+    }catch(e){toast("That text isn't a valid backup",false);}
+  });
+
+  store.get().then(function(d){
+    state=(d&&d.envelopes)?d:seed();
+    render();
+  });
+})();
+</script>
+</body>
+</html>
