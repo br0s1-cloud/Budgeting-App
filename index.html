@@ -22,9 +22,12 @@
     --manila-ink:#4A3E22;
     --slip:#F6F4EF;
     --ink:#1C1F23;
-    --ink-soft:#6B7178;
-    --stamp:#2E7A61;
+    --slip-soft:#A9B1BA;
+    --ink-soft:#5C636B;
+    --stamp:#1F5C48;
     --red:#C4483F;
+    --red-bright:#EA6A5E;
+    --red-deep:#7A231C;
     --hair:rgba(246,244,239,.14);
     --lift:0 6px 18px rgba(0,0,0,.42);
     --pad:16px;
@@ -41,8 +44,16 @@
     overscroll-behavior-y:none;
     padding:env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
   }
-  button,input,select,textarea{font:inherit;color:inherit}
-  button{background:none;border:0;padding:0;cursor:pointer}
+  button,input,select,textarea{font:inherit}
+  button{background:none;border:0;padding:0;cursor:pointer;color:inherit}
+  input,textarea,select{
+    background:var(--desk-3);
+    border:1px solid var(--hair);
+    border-radius:3px;
+    color:var(--slip);
+    -webkit-text-fill-color:var(--slip);
+  }
+  input::placeholder,textarea::placeholder{color:#8A929B;opacity:1}
 
   .label{
     font-family:'Archivo Narrow',Archivo,sans-serif;
@@ -64,14 +75,14 @@
   .top{padding:18px 0 14px;display:flex;align-items:flex-start;gap:12px}
   .top-l{flex:1;min-width:0}
   .month{display:flex;align-items:center;gap:8px;color:var(--manila)}
-  .month button{color:var(--manila);opacity:.6;padding:2px 6px;font-size:13px}
+  .month button{color:var(--manila);opacity:.8;padding:2px 6px;font-size:13px}
   .month button:hover{opacity:1}
   .big{
     font-family:'IBM Plex Mono',monospace;font-weight:600;
     font-size:40px;letter-spacing:-.02em;margin-top:4px;line-height:1
   }
-  .big.over{color:var(--red)}
-  .sub{color:var(--ink-soft);font-size:13px;margin-top:6px}
+  .big.over{color:var(--red-bright)}
+  .sub{color:var(--slip-soft);font-size:13px;margin-top:6px}
   .sub b{color:var(--slip);font-weight:500}
   .menu{
     width:38px;height:38px;border:1px solid var(--hair);border-radius:50%;
@@ -80,7 +91,7 @@
 
   .rule{height:1px;background:var(--hair);margin:2px 0 14px}
   .sec-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px}
-  .sec-head .label{color:var(--ink-soft)}
+  .sec-head .label{color:var(--slip-soft)}
 
   /* ---------- slips ---------- */
   .tray{min-height:104px;position:relative;margin-bottom:22px}
@@ -108,7 +119,7 @@
   .slip[data-depth="0"]{z-index:3}
   .slip.dragging{transition:none;box-shadow:0 18px 34px rgba(0,0,0,.5);cursor:grabbing}
   .slip.gone{opacity:0;transform:scale(.7) rotate(-6deg)}
-  .hint{color:var(--ink-soft);font-size:12px;text-align:center;padding:34px 0}
+  .hint{color:var(--slip-soft);font-size:12px;text-align:center;padding:34px 0}
 
   /* ---------- envelopes ---------- */
   .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -132,15 +143,16 @@
     background:var(--manila-dk);opacity:.55;pointer-events:none;
     transition:height .35s cubic-bezier(.2,.8,.2,1);
   }
-  .env-fill.full{background:var(--red);opacity:.75}
+  .env-fill.full{background:var(--red);opacity:.4}
   .env-name,.env-fig,.env-left{position:relative}
   .env-name{font-family:'Archivo Narrow',sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:.1em;font-size:12px}
   .env-fig{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:17px;margin-top:14px}
-  .env-left{font-size:11px;opacity:.7;margin-top:2px;letter-spacing:.03em}
+  .env-left{font-size:11px;opacity:.85;margin-top:2px;letter-spacing:.03em}
+  .env.over .env-left{color:var(--red-deep);font-weight:600;opacity:1}
   .env.hot{transform:translateY(-3px) scale(1.03);box-shadow:0 0 0 2px var(--slip),0 10px 22px rgba(0,0,0,.4)}
   .env.hit{animation:stamp .38s ease}
   @keyframes stamp{40%{transform:scale(.95)}100%{transform:scale(1)}}
-  .env.empty-limit .env-fig{opacity:.45}
+  .env.empty-limit .env-fig{opacity:.62}
 
   /* ---------- bottom bar ---------- */
   .bar{
@@ -174,7 +186,7 @@
   .sheet.on{transform:translateY(0)}
   .sheet h2{font-family:'Archivo Narrow',sans-serif;text-transform:uppercase;letter-spacing:.14em;font-size:13px;margin:0 0 14px;color:var(--manila)}
   .field{margin-bottom:12px}
-  .field label{display:block;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:6px;font-family:'Archivo Narrow',sans-serif;font-weight:700}
+  .field label{display:block;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--slip-soft);margin-bottom:6px;font-family:'Archivo Narrow',sans-serif;font-weight:700}
   .field input,.field textarea,.field select{
     width:100%;background:var(--desk-3);border:1px solid var(--hair);border-radius:3px;
     padding:12px;color:var(--slip);
@@ -190,11 +202,12 @@
     text-transform:uppercase;letter-spacing:.09em;font-size:12px;
   }
   .env-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+  .env-row input{padding:11px 10px}
   .env-row input:first-child{flex:2}
   .env-row input:nth-child(2){flex:1}
-  .env-row button{color:var(--ink-soft);padding:8px;font-size:16px;flex:none}
+  .env-row button{color:var(--slip-soft);padding:8px;font-size:16px;flex:none}
   .link{color:var(--manila);text-decoration:underline;text-underline-offset:3px;font-size:13px}
-  .quiet{color:var(--ink-soft);font-size:12px;margin-top:10px}
+  .quiet{color:var(--slip-soft);font-size:12px;margin-top:10px}
   .toast{
     position:fixed;left:50%;transform:translate(-50%,20px);bottom:96px;z-index:70;
     background:var(--slip);color:var(--ink);border-radius:3px;padding:10px 14px;
@@ -416,7 +429,7 @@
       var sp=spentIn(e.id), lim=e.limit||0;
       var pct=lim>0?Math.min(100,Math.round(sp/lim*100)):0;
       var b=document.createElement("button");
-      b.className="env"+(lim===0?" empty-limit":"");
+      b.className="env"+(lim===0?" empty-limit":"")+((lim>0&&sp>lim)?" over":"");
       b.dataset.id=e.id;
       b.innerHTML='<span class="env-fill"></span><span class="env-name"></span>'+
         '<span><span class="env-fig mono"></span><span class="env-left"></span></span>';
